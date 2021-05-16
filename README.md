@@ -5,11 +5,11 @@ Pragya Dalal
 
 ### Contents
 
-1. [Introduction](#introduction)
-   a. [Problem Statement](#problem-statement)
-   b. [First Readers Writers](#first-readers-writers-problem)
-   c. [Second Readers Writers](#second-readers-writers-problem) 
-2. [Starve Free Implementation](#starve-free-readers-writers)
+1. [Introduction](#introduction) <br>
+   a. [Problem Statement](#problem-statement) <br>
+   b. [First Readers Writers](#first-readers-writers-problem)<br>
+   c. [Second Readers Writers](#second-readers-writers-problem)
+2. [Starve Free Implementation](#starve-free-implementation)
 3. [Faster Starve Free ](#faster-starve-free)
 4. [Conclusion](#conclusion)
 
