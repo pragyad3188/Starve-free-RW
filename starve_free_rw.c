@@ -57,21 +57,26 @@ void semaphore_signal(semaphore *sem)
         pthread_mutex_unlock(&(sem->lock));
 }
 
-//Writers code; All the writers attempt to write this.
 
+//Shared Resources
 semaphore resourceAccess,orderQueue,readerMutex;
 int shared_variable=0,readcount=0;
+
+//Writers code; All the writers attempt to write this.
 void *writer(void* writer_number)
 {   
     int num=*(int*)writer_number;
-    semaphore_wait(&orderQueue);
-    semaphore_wait(&resourceAccess);
-    semaphore_signal(&orderQueue);
+   /*ENTRY SECTION*/
+    semaphore_wait(&orderQueue);          //Wait in line for turn 
+    semaphore_wait(&resourceAccess);      //Request exclusive access to the shared resource
+    semaphore_signal(&orderQueue);        //Allow others waiting in the queue to proceed.
 
+   /*CRITICAL SECTION*/
     shared_variable+=2;
     printf("Writer %d modified value of shared variable to %d\n",num,shared_variable);
     
-    semaphore_signal(&resourceAccess);
+    /*EXIT SECTION*/
+    semaphore_signal(&resourceAccess);    //Release the access to resource for next Reader/Writer
 
 }
 /*
@@ -80,22 +85,25 @@ void *writer(void* writer_number)
 void *reader(void *reader_number)
 {   
     int num=*(int*)reader_number;
-    semaphore_wait(&orderQueue);
-    semaphore_wait(&readerMutex);
+    
+    /*ENTRY SECTION*/
+    semaphore_wait(&orderQueue);       //Wait for its turn in line
+    semaphore_wait(&readerMutex);      //Gain mutex lock on readcount
     readcount++;
-    if(readcount==1)
-        semaphore_wait(&resourceAccess);
-    semaphore_signal(&orderQueue);
-    semaphore_signal(&readerMutex);
+    if(readcount==1)                   //If there are currently no readers 
+      semaphore_wait(&resourceAccess); //Request access to critical section
+    semaphore_signal(&orderQueue);     //Allow others in line to execute
+    semaphore_signal(&readerMutex);    //Release the mutex lock on readcount 
 
+   /*CRITICAL SECTION*/
     printf("Reader %d: read the shared variable as %d\n",num,shared_variable);
-
-
-    semaphore_wait(&readerMutex);
+   
+   /*EXIT SECTION*/
+    semaphore_wait(&readerMutex);      
     readcount--;
-    if(readcount==0)
-        semaphore_signal(&resourceAccess);
-    semaphore_signal(&readerMutex);
+    if(readcount==0)                       //Check if the current reader is last one waiting in the arrival queue
+        semaphore_signal(&resourceAccess); //If yes,then release access to critical section for writers 
+    semaphore_signal(&readerMutex);        //Release the mutex lock on readcount
 }
 
 

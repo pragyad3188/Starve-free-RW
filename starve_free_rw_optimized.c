@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 //Semaphore implemented with a FIFO waiting queue
 typedef struct
@@ -59,8 +60,9 @@ void semaphore_signal(semaphore *sem)
 }
 
 
-semaphore in,out,wrt;
-int cnt=0,ctrin=0,ctrout=0,wait=0;
+semaphore in,out,writerAccess;
+int shared_variable=0,readers_in=0,readers_out=0;
+bool writer_wait=0;
 
 
 /*
@@ -68,20 +70,26 @@ int cnt=0,ctrin=0,ctrout=0,wait=0;
 */
 void *writer(void *writer_no)
 {   
-    semaphore_wait(&in);
-    semaphore_wait(&out);
-    if(ctrin==ctrout)
-        semaphore_signal(&out);
+   /*ENTRY SECTION*/
+    semaphore_wait(&in);               //This sempahore ensures that readers wait for this writer to finish 
+    semaphore_wait(&out);              //Gain Access to readers_out
+    if(readers_in==readers_out)        //Checks if there are no readers in critical section
+        semaphore_signal(&out);        //If yes, enter critical section and  readers_out variable 
     else
     {
-        wait=1;
-        semaphore_signal(&out);
-        semaphore_wait(&wrt);
-        wait=0;
+        writer_wait=1;                 //If no, set boolean to true 
+        semaphore_signal(&out);        //Release readers_out variable
+        semaphore_wait(&writerAccess); //Writer then waits for the readers waiting before it to finish 
+        writer_wait=0;                 //Once finished,it enters the critical section and sets wait to false.
     }
-    cnt=cnt+2;
-    printf("Writer %d modified value %d\n",(*((int *)writer_no)),cnt);
-    semaphore_signal(&in);
+
+   
+   /*CRITICAL SECTION*/
+    shared_variable+=2;
+    printf("Writer %d modified shared variable to %d\n",(*((int *)writer_no)),shared_variable);
+
+   /*EXIT SECTION*/
+    semaphore_signal(&in);             //Release the semaphore and allow other readers and writers to continue.
 
 }
 
@@ -90,16 +98,20 @@ void *writer(void *writer_no)
 */
 void *reader(void *reader_no)
 {   
+   /*ENTRY SECTION*/
+    semaphore_wait(&in);                        //Wait in queue for writers and readers to finish
+    readers_in++;                               //Increment readers going in
+    semaphore_signal(&in);                      //Signal waiting readers/writers
 
-    semaphore_wait(&in);
-    ctrin++;
-    semaphore_signal(&in);
-    printf("Reader %d: read cnt as %d\n",*((int *)reader_no),cnt);
-    semaphore_wait(&out);
-    ctrout++;
-    if(wait==1&&ctrin==ctrout)
-        semaphore_signal(&wrt);
-    semaphore_signal(&out);
+    /*CRITICAL SECTION*/
+    printf("Reader %d: read shared variable as %d\n",*((int *)reader_no),shared_variable);
+
+    /*EXIT SECTION*/
+    semaphore_wait(&out);                       //Gain Access to the readers-out variable
+    readers_out++;
+    if(writer_wait==1&&readers_in==readers_out) //Here we check whether a writer is waiting ot not and current reader is last in queue
+        semaphore_signal(&writerAccess);        //If yes, then grant access to a writer waiting
+    semaphore_signal(&out); 
 }
 
 
@@ -112,7 +124,7 @@ int main()
     pthread_t read[6],write[5];
     in=* init(1);
     out=*init(1);
-    wrt=*init(0);
+    writerAccess=*init(0);
 
     int a[10] = {1,2,3,4,5,6,7,8,9,10}; 
 
