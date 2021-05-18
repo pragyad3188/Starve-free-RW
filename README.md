@@ -89,13 +89,13 @@ Initially, `count_readers = 0`, `count_writers = 0`,`reader_mut_exclusion = 1`, 
 ```c
 while(true)
 { 
-    wait(reader_trying_enter);                      
-        wait(reader_mut_exclusion);                  
+    wait(reader_trying_enter);              //Readers trying to enter the critical section wait over this semaphore             
+        wait(reader_mut_exclusion);         //Lock this section so that only one reader at a time can enter and change count_readers         
         count_readers++;                 
-        if (count_readers == 1)          
-            wait(resource);              
-        signal(reader_mut_exclusion);                  
-        signal(reader_trying_enter);                 
+        if (count_readers == 1)             //If the current reader is first one
+            wait(resource);                 //Then wait for previous writers to finish and then lock the resource      
+        signal(reader_mut_exclusion);       //Release Lock                 
+        signal(reader_trying_enter);        //Release Lock
 
     /* 
         -----
@@ -103,37 +103,37 @@ while(true)
         -----
     */
 
-    wait(reader_mut_exclusion);                  
+    wait(reader_mut_exclusion);             //Lock this section so that only one reader at a time can enter and change count_readers          
         count_readers--;                 
-        if (count_readers == 0)          
-            signal(resource);              
-    signal(reader_mut_exclusion); 
+        if (count_readers == 0)             //Check if you are the last reader
+            signal(resource);               //If yes,then unlock the resource for writers 
+    signal(reader_mut_exclusion);           //Release Lock
 }
 ```
 #### Code for Writers
 ```c
 while(true){
-    wait(writer_mut_exclusion);                 
-        count_writers++;                
-        if (count_writers == 1)         
-            wait(reader_trying_enter);               
+    wait(writer_mut_exclusion);             //Lock this section so that only one writer at a time can enter and change count_writers         
+        count_writers++;                    
+        if (count_writers == 1)             //Check if we are the first writer
+            wait(reader_trying_enter);      //If yes, Block new readers form entering into their entry section 
     signal(writer_mut_exclusion);  
 
-    wait(resource);  
-
+    wait(resource);                         //Now wait for the readers that arrived before writer to finish reading and then block the access to resource
+                                            //This ensures that only one writer is in the critical section at a time
     /* 
         -----
     DO WRITING
         -----
     */
 
-    signal(resource);                
+    signal(resource);                       //When the writer finished,it can release the resource for other readers and writers to access the critical section
 
-    wait(writer_mut_exclusion);                  
+    wait(writer_mut_exclusion);             //Lock this section so that only one writer can enter at a time and change the value of count_writers
         count_writers--;                
-        if (count_writers == 0)         
-            signal(reader_trying_enter);               
-    signal(writer_mut_exclusion);
+        if (count_writers == 0)             //Check if there are no more waiting writers and this is the last writer
+            signal(reader_trying_enter);    //If yes, allow readers to procedd to critical section            
+    signal(writer_mut_exclusion);           //Release Lock
 }
 ```
 This solution is preferred in applications where writes are more important than reads.However,there is a flaw. Some readers might keep waiting for the resources indefinitely as more and more writers come. Hence there is **starvation of readers**.
@@ -339,5 +339,7 @@ However,the second implementation(Faster Starve Free) is more generic and works 
 Also the faster solution requires only 1 mutex lock for a reader as compared to 2 locks required for the previous case. This is a subsatntial benefit in terms of execution time.
 
 ## References
-Operating Systems by Avi Silberschatz, Greg Gagne, and Peter Baer Galvin
+1. Operating Systems by Avi Silberschatz, Greg Gagne, and Peter Baer Galvin
+2. [pthread:- Linux Man Pages](https://man7.org/linux/man-pages/man7/pthreads.7.html)
+3. [https://arxiv.org/pdf/1309.4507.pdf](https://arxiv.org/pdf/1309.4507.pdf)
 
