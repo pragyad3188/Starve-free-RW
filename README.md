@@ -140,12 +140,56 @@ This solution is preferred in applications where writes are more important than 
 ## Starve Free Implementation
 A starve free implementation is where none of the readers or the writers have to wait indefinitely to access the shared resources.The main idea behind this solution is to add the contraint that threads wait only for a bounded amount of time. An easy way in which we can avoid starvation is by controlling the order in which readers and writers in the waiting queue access the critical section. The waiting threads are executed in the order of their arrival.
 
-Semaphores are used for mutual exclusion.There are three semaphores used:-
-1. resourceAccess:- This is a mutex lock used to access the shared resourc  e or enter the critical section.This semaphore 
-2. readerMutex:- This semaphore is used to synchronize access of the readCount variable which is shared among the threads.The readCount keeps a count of the number of waiting readers.
-3. orderQueue:- This is the most important semphore .It is the one used to remember the order of arrival of the incoming threads in a queue. It forces them to wait in a line to be serviced.
+### Pseudo Implementation
+In this starve free implementation,we have used a custom sempahore. This is because it is necessary for the semaphore to have a waiting queue with FIFO wakeup.The pseudo code is as follows:
+```C
+struct semaphore
+{
+    int value;
+    pthread_mutex_t lock;   //Mutex Lock 
+    Queue *waitingQueue;    //Waiting Queue
 
-These semaphores are used to achieve synchronization.These semaphores have been manually implemented and have a FIFO wakeup of the threads waiting in a queue. The writers code looks somewhat like this.
+    void semaphore_wait()
+    {
+        mutex_lock(&lock);
+        value--;
+        
+        if(value<0)
+        {
+            waitingQueue->push(getpid());
+            block();
+        }
+        mutex_unlock(&lock);
+    }
+
+    void semaphore_signal()
+    {
+        mutex_lock(&lock);
+        value++;
+
+        if(value <= 0)
+        {
+            int frontId=waitingQueue->pop();
+            wakeup(frontId);
+        }
+        mutex_unlock(&lock);
+    }
+};
+```
+A queue is used to keep track of the order in which the processes arrrive so that they get executed in the same `FIFO` order.
+
+The above pseudo-code uses a Queue for this purpose .However for threads, this can be imitated in linux using a condition variable along with `pthread_cond_wait()` and `pthread_cond_signal()` system calls which has been used in the code implementation.
+### Code Implementation 
+In the implemented code, `Semaphores` are used for mutual exclusion.There are three semaphores used:-
+1. `resourceAccess`:- This is a mutex lock used to access the shared resourc  e or enter the critical section.This semaphore 
+2. `readerMutex`:- This semaphore is used to synchronize access of the readCount variable which is shared among the threads.The readCount keeps a count of the number of waiting readers.
+3. `orderQueue`:- This is the most important semphore .It is the one used to remember the order of arrival of the incoming threads in a queue. It forces them to wait in a line to be serviced.
+
+These semaphores are used to achieve synchronization.These semaphores have been manually implemented and have a `FIFO wakeup` of the threads waiting in a queue.
+#### Intial Conditions
+Initially `resourceAccess=1`. `readersMutex=1`, `orderQueue=1`,`shared_variable=0`,`readcount=0`.
+
+#### Code for Writers
 ```c
 void *writer(void* writer_number)
 {   
@@ -164,9 +208,9 @@ void *writer(void* writer_number)
 
 }
 ```
-The writer checks the queue of the orderQueue semaphore and waits untill its turn. Then it waits for the critical section to be empty over the resourceAccess semaphore. Once it gains access, it updates the shared_variable and releases the critical section.This code is straightforward.
+The writer checks the waiting queue of the `orderQueue` semaphore and waits untill its turn. Then it waits over the `resourceAccess` semaphore for the critical section to become free. Once it gains access, it updates the shared_variable and releases the critical section.This code is straightforward.
 
-Looking at the reader's implementation,
+#### Code for Readers
 ```c
 void *reader(void *reader_number)
 {   
@@ -194,7 +238,7 @@ void *reader(void *reader_number)
 In the above implementation, the readers that arrives, waits for the writers to free the critical section.Then once they have acquired the critical section, keep on reading till the next writer doesnt arrive. With the help of orderQueue semaphore, the threads are run in the order they arrive.
 
 Hence the above implementation of readers writers problem is found to be sarvation free. Also :- 
-- A deadlock at orderQueue is not possible because it is requested only when no other semaphore is held by the calling thread.Hence there is no condition of deadlock.
+- A deadlock at `orderQueue` is **not possible** because it is requested only when no other semaphore is held by the calling thread.Hence in no condition can a deadlock occur.
 
 
 **Note** It is very important that the semaphore_signal() wakes up the suspended or waiting threads in a FIFO manner.This is **not supported** in the convention **sem_post()** system call provided by linux in C. Hence I have implemented a custom semaphore with FIFO queueing.
@@ -203,17 +247,20 @@ Hence the above implementation of readers writers problem is found to be sarvati
 The above solution is simple and fair enough but we have to use two semaphores for a reader to gain access of critical section in order of arrival of the threads. However, the mutex lock is a heavy system call and lowers the speed of execution, we therefore try to use reduce the number of semaphores used for accessing the critical section.
 
 In this solution, there are 3 semaphores used:-
-1. in :- Controls the readers getting into the critical section
-2. out :- Used for mutual exclusion of the readers_out shared variable.
-3. writerAccess :- THis semaphore is used to grant a waiting writing access to the critical section when the last reader in queue has finished.
+1. `in` :- Controls the readers getting into the critical section
+2. `out` :- Used for mutual exclusion of the num_readers_out shared variable.
+3. `writerAccess` :- THis semaphore is used to grant a waiting writing access to the critical section when the last reader in queue has finished.
 
-The readers code is as follows:-
+#### Initial Condition
+Initially, `in=1`,`out=1`,`writerAccess=0`,`num_readers_in=0`,`num_readers_out=0`,`shared_variables=0`.
+#### Code for Readers
+
 ```C
 void *reader(void *reader_no)
 {   
    /*ENTRY SECTION*/
     semaphore_wait(&in);                     //Wait in queue for writers and readers to finish
-    readers_in++;                            //Increment readers going in
+    num_readers_in++;                            //Increment readers going in
     semaphore_signal(&in);                   //Signal waiting readers/writers
 
     /*CRITICAL SECTION*/
@@ -221,29 +268,33 @@ void *reader(void *reader_no)
 
     /*EXIT SECTION*/
     semaphore_wait(&out);                    //Gain Access to the readers-out variable
-    readers_out++;
-    if(writer_wait==1&&readers_in==readers_out) //Here we check whether a writer is waiting ot not and current reader is last in queue
+    num_readers_out++;
+    if(writer_wait==1&&num_readers_in==num_readers_out) //Here we check whether a writer is waiting ot not and current reader is last in queue
         semaphore_signal(&writerAccess);     //If yes, then grant access to a writer waiting
     semaphore_signal(&out); 
 }
 ```
-The readers sole access to the critical section is just controlled by the in semaphore. In the exit section, readers check whether writers are waiting or not and the last reader grant's access to it.
+The readers sole access to the critical section is just controlled by the **in** semaphore.
+- If there is a writer before the reader, then the writer has locked **in** semaphore .The reader waits for the writer to finish and then enters the critical section.
+- If there are no writers before then the reader is given access to the critical section directly.
+-  In the exit section, readers check whether writers are waiting or not. If they are the last reader, then they release the **writerAccess** semaphore and grant access to writers to enter critical section.
 
-The writers code works in combinatio with this:-
+#### Code for Writers
 ```C
 void *writer(void *writer_no)
 {   
    /*ENTRY SECTION*/
-    semaphore_wait(&in);               //This sempahore ensures that readers wait for this writer to finish 
-    semaphore_wait(&out);              //Gain Access to readers_out
-    if(readers_in==readers_out)        //Checks if there are no readers in critical section
-        semaphore_signal(&out);        //If yes, enter critical section and  readers_out variable 
+    semaphore_wait(&in);                //This sempahore ensures that readers wait for this writer to finish 
+    semaphore_wait(&out);               //Gain Access to num_readers_out
+    
+    if(num_readers_in==num_readers_out) //Checks if there are no readers in critical section
+        semaphore_signal(&out);         //If yes, enter critical section and  num_readers_out variable 
     else
     {
-        writer_wait=1;                 //If no, set boolean to true 
-        semaphore_signal(&out);        //Release readers_out variable
-        semaphore_wait(&writerAccess); //Writer then waits for the readers waiting before it to finish 
-        writer_wait=0;                 //Once finished,it enters the critical section and sets wait to false.
+        writer_wait=true;                  //If no, set boolean to true 
+        semaphore_signal(&out);         //Release num_readers_out variable
+        semaphore_wait(&writerAccess);  //Writer then waits for the readers waiting before it to finish 
+        writer_wait=false;                  //Once finished,it enters the critical section and sets wait to false.
     }
 
    /*CRITICAL SECTION*/
@@ -255,7 +306,13 @@ void *writer(void *writer_no)
 
 }
 ```
-The core idea is that writers tell the readers their necessity to access the critical section in such a way that no new readers can start working. All the readers check before leaving if there is a waiting writer or not and they are the last reader. They signal the writer to procedd if that is the case.After the writers finished their critical section, they signal the waiting readers to proceed. 
+The core idea is that writers tell the readers their necessity to access the critical section in such a way that no new readers can start working.
+- Once a writer arrives, it takes the **in** semaphore and forces the subsequent readers or writers to wait.The writer releases this only once it has finished its execution.
+- If there are no readers in the critical section, it executes critical section and releases the **in** semaphore upon exit.
+- If there are readers that arrived before the writer,then they are allowed to execute and writer waits over **writerAccess** and sets the boolean **writer_wait** to true. 
+- The last reader upon leaving the critical section,looks for waiting writers and signals or releases **writerAccess** semaphore granting access to the waiting writer.
+
+Hence all the writers have a BOUNDED WAIT. Thus starvation is not possible with the use of a FIFO semaphore as the incoming readers that come after the writer wait in the queue in a FIFO manner. 
 
 ## Steps To Run
 To run the code, ensure gcc (C-compiler) is installed in your system.

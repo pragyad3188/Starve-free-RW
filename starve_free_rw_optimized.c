@@ -61,7 +61,7 @@ void semaphore_signal(semaphore *sem)
 
 
 semaphore in,out,writerAccess;
-int shared_variable=0,readers_in=0,readers_out=0;
+int shared_variable=0,num_readers_in=0,num_readers_out=0;
 bool writer_wait=0;
 
 
@@ -71,16 +71,16 @@ bool writer_wait=0;
 void *writer(void *writer_no)
 {   
    /*ENTRY SECTION*/
-    semaphore_wait(&in);               //This sempahore ensures that readers wait for this writer to finish 
-    semaphore_wait(&out);              //Gain Access to readers_out
-    if(readers_in==readers_out)        //Checks if there are no readers in critical section
-        semaphore_signal(&out);        //If yes, enter critical section and  readers_out variable 
+    semaphore_wait(&in);                //This sempahore ensures that readers wait for this writer to finish 
+    semaphore_wait(&out);               //Gain Access to num_readers_out
+    if(num_readers_in==num_readers_out) //Checks if there are no readers in critical section
+        semaphore_signal(&out);         //If yes, enter critical section and  num_readers_out variable 
     else
     {
-        writer_wait=1;                 //If no, set boolean to true 
-        semaphore_signal(&out);        //Release readers_out variable
-        semaphore_wait(&writerAccess); //Writer then waits for the readers waiting before it to finish 
-        writer_wait=0;                 //Once finished,it enters the critical section and sets wait to false.
+        writer_wait=1;                  //If no, set boolean to true 
+        semaphore_signal(&out);         //Release num_readers_out variable
+        semaphore_wait(&writerAccess);  //Writer then waits for the readers waiting before it to finish 
+        writer_wait=0;                  //Once finished,it enters the critical section and sets wait to false.
     }
 
    
@@ -100,7 +100,7 @@ void *reader(void *reader_no)
 {   
    /*ENTRY SECTION*/
     semaphore_wait(&in);                        //Wait in queue for writers and readers to finish
-    readers_in++;                               //Increment readers going in
+    num_readers_in++;                               //Increment readers going in
     semaphore_signal(&in);                      //Signal waiting readers/writers
 
     /*CRITICAL SECTION*/
@@ -108,8 +108,8 @@ void *reader(void *reader_no)
 
     /*EXIT SECTION*/
     semaphore_wait(&out);                       //Gain Access to the readers-out variable
-    readers_out++;
-    if(writer_wait==1&&readers_in==readers_out) //Here we check whether a writer is waiting ot not and current reader is last in queue
+    num_readers_out++;
+    if(writer_wait==1&&num_readers_in==num_readers_out) //Here we check whether a writer is waiting ot not and current reader is last in queue
         semaphore_signal(&writerAccess);        //If yes, then grant access to a writer waiting
     semaphore_signal(&out); 
 }
