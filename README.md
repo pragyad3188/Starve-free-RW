@@ -11,6 +11,7 @@ Submitted by: Pragya Dalal 19114063
 3. [Faster Starve Free ](#faster-starve-free)
 4. [Steps To Run](#steps-to-run)
 5. [Conclusion](#conclusion)
+6. [References](#references)
 
 ## Introduction
 The following documentation describes a starvation free solution to the readers writers problem.
@@ -43,11 +44,11 @@ Initially, `count_readers=0`, `reader_mut_exclusion = 1` and `resource = 1` .
 ```c
 while(true)
 {   
-    wait(reader_mut_exclusion);
-        count_readers++;
-        if(count_readers==1) 
-            wait(resource);
-    signal(reader_mut_exclusion);
+    wait(reader_mut_exclusion);                     //Lock this section so that only one reader at a time can enter and change count_readers
+        count_readers++;                            
+        if(count_readers==1)                        //Check if this reader is the first reader
+            wait(resource);                         //If this reader is the first reader then wait if any writer is still writing and then lock the resource, subsequent readers don't need to relock it 
+    signal(reader_mut_exclusion);                   //Release the lock for other readers
 
     /* 
         -----
@@ -55,23 +56,23 @@ while(true)
         -----
     */
 
-    wait(reader_mut_exclusion);
-        count_readers--;
-        if(count_readers==0)
-            signal(resource);
-    signal(reader_mut_exclusion);
+    wait(reader_mut_exclusion);                     //Lock this section so that only one reader at a time can enter and change count_readers
+        count_readers--;                            
+        if(count_readers==0)                        //Check this is the last reader 
+        signal(resource);                           //If this is the last reader, then unlock the resource so that now it is available to writers                        
+    signal(reader_mut_exclusion);                   //Release the lock for other readers
 }
 ```
 #### Code for Writers
 ```c
 while(true){
-    wait(resource);
+    wait(resource);                                 //Lock this shared area so that only this writer can write at this time
         /* 
             -----
         DO WRITING
             -----
         */
-    signal(resource);
+    signal(resource);                               //Unlock this area so that if there is a reader requesting for it can take it or if no reader is waiting then writer can access this 
 }
 ```
 
@@ -88,7 +89,7 @@ Initially, `count_readers = 0`, `count_writers = 0`,`reader_mut_exclusion = 1`, 
 ```c
 while(true)
 { 
-    wait(reader_trying_enter);                 
+    wait(reader_trying_enter);                      
         wait(reader_mut_exclusion);                  
         count_readers++;                 
         if (count_readers == 1)          
@@ -339,3 +340,4 @@ Also the faster solution requires only 1 mutex lock for a reader as compared to 
 
 ## References
 Operating Systems by Avi Silberschatz, Greg Gagne, and Peter Baer Galvin
+
