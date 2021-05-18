@@ -11,7 +11,8 @@ Pragya Dalal
    c. [Second Readers Writers](#second-readers-writers-problem)
 2. [Starve Free Implementation](#starve-free-implementation)
 3. [Faster Starve Free ](#faster-starve-free)
-4. [Conclusion](#conclusion)
+4. [Steps To Run](#steps-to-run)
+5. [Conclusion](#conclusion)
 
 ### Introduction
 The following documentation describes a starvation free solution to the readers writers problem.
@@ -169,6 +170,22 @@ void *writer(void *writer_no)
 ```
 The core idea is that writers tell the readers their necessity to access the critical section in such a way that no new readers can start working.All the readers check before leaving if there is a waiting writer or not and they are the last reader.They signal the writer to procedd if that is the case.After the writers finished their critical section, they signal the waiting readers to proceed. 
 
+### Steps To Run
+To run the code, ensure gcc (C-compiler) is installed in your system.
+- Step 1:- Clone the repository and move into the cloned repo.
+```console
+    $ git clone https://github.com/pragyad3188/Starve-free-RW.git
+``` 
+- Step 2:- To run the first solution of starve free problem,run the command:-
+```console
+    $ gcc -pthread -o run starve_free_rw.c
+    $ ./run 
+``` 
+- Step 3:- To run the optimized code of starve free problem,run the command
+```console
+    $ gcc -pthread -o run starve_free_rw_optimized.c
+    $ ./run
+```
 ### Conclusion
 A starve free implementation of the readers writers problem is seen here.We saw two apporoaches however it is important to note that the first approach requires that the semaphore be implemented in such a way that the waiting queue is implemented as a FIFO,otherwise there may be starvation of waiting writers.
 
